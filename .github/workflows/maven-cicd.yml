@@ -41,7 +41,11 @@ jobs:
       - name: Checkout
         id: checkout
         uses: actions/checkout@v4
- 
+      - name: Download JAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: cobrojava-artifact
+          path: target
       # Perform an evaluation 
       - name: Run evaluate action 
         id: evaluate
