@@ -1,72 +1,57 @@
-name: Maven CI/CD
+name: Pipeline-github
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
   pull_request:
-  workflow_dispatch:
-
-
-env:
-  MAVEN_CLI_OPTS: "-s .m2/settings.xml --batch-mode"
+    branches: [ "main" ]
 
 jobs:
+  
   build:
-    name: Build project
     runs-on: ubuntu-latest
-    environment: Nexus
+    permissions:
+      contents: read
+      packages: write
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - uses: actions/checkout@v4
+    - name: Set up JDK 11
+      uses: actions/setup-java@v4
+      with:
+        java-version: '11'
+        distribution: 'temurin'
+        server-id: github # Value of the distributionManagement/repository/id field of the pom.xml
+        settings-path: ${{ github.workspace }} # location for the settings.xml file
+    - name: Build with Maven
+      #run: mvn clean install --settings .m2/settings.xml
+      run: mvn -B package --file pom.xml
+    - name: Upload JAR artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: cobrojava-artifact
+        path: target/*.jar
 
-      - name: Set up Java
-        uses: actions/setup-java@v3
-        with:
-          distribution: 'temurin'
-          java-version: '8'
-
-      - name: Cache Maven packages
-        uses: actions/cache@v3
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-maven-
-
-      - name: Build with Maven
-        run: mvn clean install ${{ env.MAVEN_CLI_OPTS }}
-
-      - name: Save build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: maven-target
-          path: target/
-
-  deploy:
-    name: Deploy to Nexus Repository
+  sonatype-cli:
     runs-on: ubuntu-latest
+    environment: Nexus
     needs: build
-    environment: Nexus
-
     steps:
-      - name: Checkout repository
+      #Check out your code
+      - name: Checkout
+        id: checkout
         uses: actions/checkout@v4
-
-      - name: Set up Java
-        uses: actions/setup-java@v3
+ 
+      # Perform an evaluation 
+      - name: Run evaluate action 
+        id: evaluate
+        uses: sonatype/actions/evaluate@v1
         with:
-          distribution: 'temurin'
-          java-version: '8'
-
-      - name: Restore Maven cache
-        uses: actions/cache@v3
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-maven-
-
-      - name: Deploy to Nexus
-        run: mvn ${{ env.MAVEN_CLI_OPTS }} deploy -Dmaven.test.skip=true
+          iq-server-url: http://52.234.210.127:8070/
+          username: ${{ secrets.NEXUS_IQ_USERNAME }}
+          password: ${{ secrets.NEXUS_IQ_PASSWORD }}
+          application-id: CobroJava
+          scan-targets: target/*.jar
+          # upload-sarif-file: true
+        
+   
