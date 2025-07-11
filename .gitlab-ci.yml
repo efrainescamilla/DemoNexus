@@ -1,0 +1,65 @@
+image: maven:3.6.3
+
+stages:          # List of stages for jobs, and their order of execution
+  
+  - build  
+  - test
+  - deploy 
+
+workflow:  
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: always
+    - when: never
+
+include:
+- component: gitlab.com/components/sast/sast@2.0.1
+  inputs:
+    search_max_depth: "15"
+- template: Jobs/SAST.gitlab-ci.yml
+- template: Security/Secret-Detection.gitlab-ci.yml
+- template: Security/Dependency-Scanning.gitlab-ci.yml
+
+variables:
+   MAVEN_CLI_OPTS: "-s .m2/settings.xml --batch-mode"
+   GITLAB_ADVANCED_SAST_ENABLED: 'true'
+
+cache:
+  paths:
+    - .m2/repository
+
+  
+
+# iq_policy_eval:
+#   stage: build
+#   image: sonatype/gitlab-nexus-iq-pipeline:latest
+#   allow_failure: false
+#   script:
+#     - /sonatype/evaluate --application-id DemoNexus .
+#     - ERROR=$?
+#     - echo error code was $ERROR
+#     - exit $ERROR
+#   artifacts:
+#     name: "policy-eval-DemoNexus"
+#     paths:
+#       - DemoNexus-policy-eval-report.html
+
+build:
+  stage: build
+  script:
+    #- mvn clean install
+    - mvn clean install --settings .m2/settings.xml
+    - echo "building..."
+  artifacts:
+    paths:
+      - 'target/'
+
+DeployToNexusRepo:
+  stage: deploy
+  script:
+  - echo "init the package in local repository"
+  - mvn $MAVEN_CLI_OPTS deploy -Dmaven.test.skip=true
+  - echo "installing the package in local repository"
+ 
+gemnasium-dependency_scanning:
+  dependencies: ["build"]
